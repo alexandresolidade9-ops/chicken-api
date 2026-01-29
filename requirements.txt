@@ -1,7 +1,8 @@
 fastapi
 uvicorn
 gunicorn
-pydantic
-numpy
 python-multipart
-
+numpy
+pydantic
+passlib[bcrypt]
+python-jose
