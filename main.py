@@ -4,10 +4,10 @@ from api import router as api_router
 
 app = FastAPI(title="Chicken Road API")
 
+# CORS (obrigatório para Flutter/Web)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -16,4 +16,7 @@ app.add_middleware(
 def root():
     return {"status": "API Chicken Road online"}
 
+# ⬇️ REGISTRA AS ROTAS
 app.include_router(api_router)
+
+
