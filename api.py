@@ -11,4 +11,3 @@ class SignalRequest(BaseModel):
 @router.post("/signal")
 def signal(req: SignalRequest):
     return analyze_sequence(req.history)
-

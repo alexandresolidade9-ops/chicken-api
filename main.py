@@ -4,7 +4,6 @@ from api import router as api_router
 
 app = FastAPI(title="Chicken Road API")
 
-# 🔓 CORS para Flutter / Web
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
