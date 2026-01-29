@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from api import router
 from fastapi.middleware.cors import CORSMiddleware
+from auth import router  # 👈 AQUI ESTÁ A CORREÇÃO
 
 app = FastAPI(title="Chicken Road API")
 
