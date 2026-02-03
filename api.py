@@ -1,14 +1,14 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
-from passlib.context import CryptContext
-from database import get_db
+import hashlib
+import sqlite3
 from chicken_core import analyze_sequence
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+DB = "database.db"
 
-# ================= MODELS =================
+# ---------- MODELS ----------
 
 class RegisterRequest(BaseModel):
     email: str
@@ -21,13 +21,17 @@ class LoginRequest(BaseModel):
 class SignalRequest(BaseModel):
     history: List[float]
 
-# ================= AUTH =================
+# ---------- HELPERS ----------
 
-def hash_password(password: str):
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
 
-def verify_password(password: str, hashed: str):
-    return pwd_context.verify(password, hashed)
+def get_db():
+    conn = sqlite3.connect(DB)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# ---------- AUTH ----------
 
 @router.post("/register")
 def register(req: RegisterRequest):
@@ -41,7 +45,7 @@ def register(req: RegisterRequest):
         )
         db.commit()
         return {"status": "Usuário criado"}
-    except:
+    except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="Usuário já existe")
     finally:
         db.close()
@@ -58,12 +62,15 @@ def login(req: LoginRequest):
     user = cursor.fetchone()
     db.close()
 
-    if not user or not verify_password(req.password, user["password"]):
+    if not user:
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+
+    if hash_password(req.password) != user["password"]:
         raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
     return {"status": "ok", "email": req.email}
 
-# ================= SIGNAL =================
+# ---------- SIGNAL ----------
 
 @router.post("/signal")
 def signal(req: SignalRequest):
