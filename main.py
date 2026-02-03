@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from auth import router  # 👈 AQUI ESTÁ A CORREÇÃO
+from api import router
+from database import init_db
 
 app = FastAPI(title="Chicken Road API")
 
@@ -10,6 +11,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+init_db()
 
 @app.get("/")
 def root():

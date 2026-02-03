@@ -1,25 +1,15 @@
-import json
-import os
-from fastapi import HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from fastapi import APIRouter
 from typing import List
-from datetime import datetime
-
+from passlib.context import CryptContext
+from database import get_db
 from chicken_core import analyze_sequence
-from auth import hash_password   # 👈 ESTA LINHA
 
 router = APIRouter()
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# =====================
-# CONFIG
-# =====================
-USERS_FILE = "users.json"
-signal_history = []
+# ================= MODELS =================
 
-# =====================
-# MODELOS
-# =====================
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -31,56 +21,50 @@ class LoginRequest(BaseModel):
 class SignalRequest(BaseModel):
     history: List[float]
 
-# =====================
-# USUÁRIOS (LOGIN)
-# =====================
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        return {"users": []}
-    with open(USERS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+# ================= AUTH =================
 
-def save_users(data):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+def hash_password(password: str):
+    return pwd_context.hash(password)
+
+def verify_password(password: str, hashed: str):
+    return pwd_context.verify(password, hashed)
 
 @router.post("/register")
 def register(req: RegisterRequest):
-    data = load_users()
+    db = get_db()
+    cursor = db.cursor()
 
-    if any(u["email"] == req.email for u in data["users"]):
+    try:
+        cursor.execute(
+            "INSERT INTO users (email, password) VALUES (?, ?)",
+            (req.email, hash_password(req.password)),
+        )
+        db.commit()
+        return {"status": "Usuário criado"}
+    except:
         raise HTTPException(status_code=400, detail="Usuário já existe")
-
-    data["users"].append({
-        "email": req.email,
-        "password": hash_password(req.password)
-    })
-
-    save_users(data)
-    return {"status": "Usuário criado com sucesso"}
+    finally:
+        db.close()
 
 @router.post("/login")
 def login(req: LoginRequest):
-    data = load_users()
+    db = get_db()
+    cursor = db.cursor()
 
-    for user in data["users"]:
-        if user["email"] == req.email and user["password"] == req.password:
-            return {"status": "ok", "email": user["email"]}
+    cursor.execute(
+        "SELECT password FROM users WHERE email = ?",
+        (req.email,),
+    )
+    user = cursor.fetchone()
+    db.close()
 
-    raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    if not user or not verify_password(req.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
-# =====================
-# SINAL
-# =====================
+    return {"status": "ok", "email": req.email}
+
+# ================= SIGNAL =================
+
 @router.post("/signal")
 def signal(req: SignalRequest):
-    result = analyze_sequence(req.history)
-
-    result["timestamp"] = datetime.utcnow().isoformat()
-    signal_history.append(result)
-
-    return result
-
-@router.get("/history")
-def history():
-    return signal_history[-20:]
+    return analyze_sequence(req.history)

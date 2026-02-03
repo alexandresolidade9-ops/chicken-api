@@ -1,6 +1,4 @@
-import numpy as np
-
-LEVELS = [
+CHICKEN_LADDER = [
     1.03, 1.07, 1.12, 1.17, 1.23,
     1.29, 1.36, 1.44, 1.53, 1.63,
     1.75, 1.88, 2.04, 2.22, 2.45,
@@ -8,69 +6,49 @@ LEVELS = [
     6.13, 6.61, 9.81, 19.44
 ]
 
-# 🧠 memória simples (runtime)
-LAST_SIGNAL_INDEX = -1
-COOLDOWN_ROUNDS = 3
-
-def analyze_sequence(history: list[float]) -> dict:
-    global LAST_SIGNAL_INDEX
-
-    if len(history) < 12:
+def analyze_sequence(history):
+    if len(history) < 3:
         return {
             "signal": "NO_BET",
             "reason": "Histórico insuficiente"
         }
 
-    current_index = len(history)
+    # pega últimos 3
+    last = history[-3:]
 
-    # ⏳ Cooldown
-    if LAST_SIGNAL_INDEX != -1:
-        if current_index - LAST_SIGNAL_INDEX <= COOLDOWN_ROUNDS:
+    # verifica se estão na escada
+    indices = []
+    for h in last:
+        if h not in CHICKEN_LADDER:
             return {
                 "signal": "NO_BET",
-                "reason": "Cooldown ativo – aguardando novas rodadas"
+                "reason": "Valor fora da escada real"
+            }
+        indices.append(CHICKEN_LADDER.index(h))
+
+    # verifica subida
+    if indices[0] < indices[1] < indices[2]:
+        next_index = indices[-1] + 1
+
+        if next_index >= len(CHICKEN_LADDER):
+            return {
+                "signal": "NO_BET",
+                "reason": "Topo da escada"
             }
 
-    last = history[-1]
-    recent = history[-6:]
+        target = CHICKEN_LADDER[next_index]
 
-    slope = np.polyfit(range(len(recent)), recent, 1)[0]
-    volatility = np.std(recent)
-
-    target = None
-    for lvl in LEVELS:
-        if lvl > last:
-            target = lvl
-            break
-
-    if not target:
         return {
-            "signal": "NO_BET",
-            "reason": "Topo da escada atingido"
+            "signal": "BET",
+            "target": target,
+            "confidence": "REAL",
+            "reason": (
+                f"Escada crescente detectada: "
+                f"{last[0]}x → {last[1]}x → {last[2]}x"
+            )
         }
-
-    if slope < -0.05:
-        return {
-            "signal": "NO_BET",
-            "reason": "Tendência negativa"
-        }
-
-    if volatility > 1.2:
-        return {
-            "signal": "NO_BET",
-            "reason": "Volatilidade alta"
-        }
-
-    # 🟢 sinal aprovado
-    LAST_SIGNAL_INDEX = current_index
 
     return {
-        "signal": "BET",
-        "target": target,
-        "confidence": "ALTA" if volatility < 0.6 else "MÉDIA",
-        "reason": (
-            f"Tendência favorável\n"
-            f"Volatilidade controlada ({volatility:.2f})\n"
-            f"Próximo nível real: {target}x"
-        )
+        "signal": "NO_BET",
+        "reason": "Sem sequência crescente"
     }
