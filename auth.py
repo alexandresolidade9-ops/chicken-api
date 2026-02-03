@@ -1,21 +1,26 @@
 import json
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import HTTPException, APIRouter
 from pydantic import BaseModel
 from typing import List
 from datetime import datetime
+from passlib.context import CryptContext
 
-from chicken_core import analyze_sequence
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto"
+)
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(password: str, hashed: str) -> bool:
+    return pwd_context.verify(password, hashed)
 
 router = APIRouter()
-
 USERS_FILE = "users.json"
-signal_history = []
 
 
-# ======================
-# MODELS
-# ======================
 class RegisterRequest(BaseModel):
     email: str
     password: str
@@ -26,32 +31,18 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class SignalRequest(BaseModel):
-    history: List[float]
-
-
-# ======================
-# HELPERS
-# ======================
 def load_users():
     if not os.path.exists(USERS_FILE):
-        return {"users": []}
-
-    with open(USERS_FILE, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError:
-            return {"users": []}
+        return []
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
 
 
-def save_users(data):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
 
 
-# ======================
-# ROUTES
-# ======================
 @router.post("/register")
 def register(req: RegisterRequest):
     data = load_users()
@@ -61,7 +52,7 @@ def register(req: RegisterRequest):
 
     data["users"].append({
         "email": req.email,
-        "password": req.password
+        "password": hash_password(req.password)
     })
 
     save_users(data)
@@ -73,20 +64,12 @@ def login(req: LoginRequest):
     data = load_users()
 
     for user in data["users"]:
-        if user["email"] == req.email and user["password"] == req.password:
+        if user["email"] == req.email and verify_password(
+            req.password,
+            user["password"]
+        ):
             return {"status": "ok", "email": user["email"]}
 
     raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
 
-@router.post("/signal")
-def signal(req: SignalRequest):
-    result = analyze_sequence(req.history)
-    result["timestamp"] = datetime.utcnow().isoformat()
-    signal_history.append(result)
-    return result
-
-
-@router.get("/history")
-def history():
-    return signal_history[-20:]
