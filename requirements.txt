@@ -4,5 +4,3 @@ gunicorn
 pydantic
 numpy
 python-multipart
-passlib[bcrypt]
-
