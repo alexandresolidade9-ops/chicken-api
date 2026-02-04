@@ -1,14 +1,12 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List
-import hashlib
-import sqlite3
+import json, os
 from chicken_core import analyze_sequence
 
 router = APIRouter()
-DB = "database.db"
 
-# ---------- MODELS ----------
+USERS_FILE = "users.json"
 
 class RegisterRequest(BaseModel):
     email: str
@@ -21,56 +19,40 @@ class LoginRequest(BaseModel):
 class SignalRequest(BaseModel):
     history: List[float]
 
-# ---------- HELPERS ----------
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        return []
+    with open(USERS_FILE, "r") as f:
+        return json.load(f)
 
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def get_db():
-    conn = sqlite3.connect(DB)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-# ---------- AUTH ----------
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
 
 @router.post("/register")
 def register(req: RegisterRequest):
-    db = get_db()
-    cursor = db.cursor()
+    users = load_users()
 
-    try:
-        cursor.execute(
-            "INSERT INTO users (email, password) VALUES (?, ?)",
-            (req.email, hash_password(req.password)),
-        )
-        db.commit()
-        return {"status": "Usuário criado"}
-    except sqlite3.IntegrityError:
+    if any(u["email"] == req.email for u in users):
         raise HTTPException(status_code=400, detail="Usuário já existe")
-    finally:
-        db.close()
+
+    users.append({
+        "email": req.email,
+        "password": req.password
+    })
+
+    save_users(users)
+    return {"status": "ok"}
 
 @router.post("/login")
 def login(req: LoginRequest):
-    db = get_db()
-    cursor = db.cursor()
+    users = load_users()
 
-    cursor.execute(
-        "SELECT password FROM users WHERE email = ?",
-        (req.email,),
-    )
-    user = cursor.fetchone()
-    db.close()
+    for u in users:
+        if u["email"] == req.email and u["password"] == req.password:
+            return {"status": "ok", "email": u["email"]}
 
-    if not user:
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
-
-    if hash_password(req.password) != user["password"]:
-        raise HTTPException(status_code=401, detail="Credenciais inválidas")
-
-    return {"status": "ok", "email": req.email}
-
-# ---------- SIGNAL ----------
+    raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
 @router.post("/signal")
 def signal(req: SignalRequest):
