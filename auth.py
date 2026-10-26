@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 
 from database import fetchone, execute
 
-router = APIRouter()
+router = APIRouter(prefix="/customer/auth", tags=["Customer Authentication"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
